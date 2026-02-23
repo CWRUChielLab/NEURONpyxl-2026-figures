@@ -25,13 +25,7 @@ parser.add_argument(
 
 def check_path(path:Path):
     if not path.exists():
-        print(f"Error: File '{path}' does not exist.")
-        sys.exit(1)
-
-def check_file(path:Path):
-    if not path.is_file():
-        print(f"Error: '{path}' is not a file.")
-        sys.exit(1)
+        raise FileNotFoundError(f"[Errno 2] No such file or directory: {path}")
 
 
 def main():
@@ -45,7 +39,7 @@ def main():
     snnap_path = args.snnap_data
     
     check_path(script_path)
-    check_file(script_path)
+    check_path(script_path)
     check_path(snnap_path)
 
     try:

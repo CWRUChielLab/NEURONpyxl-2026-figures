@@ -1,142 +1,98 @@
-# To compile the mod files, run neuronpyxl -f gen_mods --file Excel_files/fig8.xlsx
-
-import pandas as pd
+import numpy as np
+import os
 import scienceplots
 import matplotlib.pyplot as plt
-import sys
-sys.path.append("../")
+import pandas as pd
+plt.style.use(['no-latex','notebook'])
+
+excelpath = "./Excel_files"
+excelfile = "fig5-fig9.xlsx"
+
+data_folder = "/media/uri/uri-external-drive/SNNAP_data/fig9"
+
+snnap_data = pd.read_csv(os.path.join(data_folder,"snnap.smu.out"), sep="\t",header=None)
+snnap_data.columns = ["t","V","I1","I2","I3","I4","I5","I6","I7","I8"]
+snnap_data = snnap_data[snnap_data["t"] > 10]
+data = pd.HDFStore(os.path.join(data_folder,"nrn.h5"))["membrane"]
+t = data["t"].to_numpy() / 1000
+v = data["V_B4"].to_numpy()
+vsnnap = snnap_data["V"].to_numpy()
+
 from neuronpyxl import network
-import numpy as np
-import math
-import os
 
-snnapdatapath = "/media/uri/uri-external-drive/SNNAP_data/fig8"
-excelpath = "./sheets"
-figpath = "./figs"
-fig_prefix = "Dickman_etal_Results"
-excelfile = "fig8.xlsx"
+freq = 50
+weight = 1e-5
+tau = 25
+"""
+nw = network.Network(
+        params_file=os.path.join(excelpath,excelfile),
+        sim_name="nostim",
+        noise=None,
+        dt=-1,
+        integrator=2,
+        atol=1e-5,
+        seed=True,
+        eq_time=5000,
+        simdur=10000
+        )
 
-def remove_axes(ax,remove_x=True,remove_y=False):
-    # For aesthetics
-    ax.xaxis.set_ticks_position('bottom')
-    ax.yaxis.set_ticks_position('left')
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
-    if remove_x:
-        ax.spines['bottom'].set_visible(False)
-        ax.set_xticks([])
-    if remove_y:
-        ax.spines['left'].set_visible(False)
-        ax.set_yticks([])
-        
-def plot_vertical_scalebar(ax,scalebar_length=20,bar_width=0.25,offset=0,yoffset=10):
-    from matplotlib.patches import Rectangle
-    # Get axis limits
-    xlim = ax.get_xlim()
-    ylim = ax.get_ylim()
+nw.run()
+"""
+data_clean = pd.HDFStore("./Dickman_etal_2025_Figures/Data/fig9/clean_B4/nostim_data.h5")["membrane"]["V_B4"]
+#rest_potential = nw.get_cell_data("B4")["V"][-1]
+rest_potential=data_clean.to_numpy()[-1]
+print(f"Rest potential: {rest_potential} mV")
+"""
+nw_noisy = network.Network(
+        params_file=os.path.join(excelpath,excelfile),
+        sim_name="nostim",
+        noise=(freq,weight,tau),
+        dt=-1,
+        integrator=2,
+        atol=1e-5,
+        seed=True,
+        eq_time=1000,
+        simdur=500000
+        )
+nw_noisy.run()
+"""
 
-    # Coordinates for bottom-right corner
-    x_start = xlim[1] - offset - bar_width
-    y_start = ylim[0] + offset + yoffset
+from scipy.optimize import curve_fit
+fs = 30
+def gauss(x, A, mu, sigma):
+    return 1/np.sqrt(2*np.pi)/A * np.exp(-(x - mu)**2 / (2 * sigma**2))
 
-    scalebar = Rectangle((x_start, y_start), width=bar_width, height=scalebar_length,
-                        color='black', linewidth=0, zorder=10)
+def gaussian_fit(counts,bins,data):    
+    bin_centers = 0.5*(bins[1:] + bins[:-1])
+    p0 = [1., np.mean(data), np.std(data)]
+    popt, _ = curve_fit(gauss, bin_centers, counts, p0=p0)
+    x_fit = np.linspace(min(bins), max(bins), 100)
+    return x_fit, *popt
+nbins = 50
+fig, axs = plt.subplots(1, 1, figsize=(14, 10), constrained_layout=True)
+nvcounts, nvbins, _ = axs.hist(v-rest_potential, bins=nbins, color='red', edgecolor='none',
+                                   alpha=0.4,orientation="vertical", density=True,label="NEURON")
+svcounts, svbins, _ = axs.hist(vsnnap-rest_potential, bins=nbins, color='dodgerblue', edgecolor='none',
+                                   alpha=0.4,orientation="vertical", density=True,label="SNNAP")
+nrnfit = gaussian_fit(nvcounts, nvbins, v-rest_potential)
+snnapfit = gaussian_fit(svcounts, svbins, vsnnap-rest_potential)
+ls = "dashed"
+axs.set_xlabel(r"$V-Vr$ (mV)",fontsize=fs)
+lw = 4
+axs.plot(nrnfit[0],gauss(*nrnfit), color='red', label=None,linewidth=lw,linestyle=ls)
+axs.plot(snnapfit[0], gauss(*snnapfit), color='dodgerblue', label=None,linewidth=lw,linestyle=ls)
+axs.legend(frameon=False,loc="upper right",fontsize=30)
+# for ax in axs.flatten():
+axs.spines["top"].set_visible(False)
+axs.spines["right"].set_visible(False)
+axs.spines["left"].set_visible(False)
+axs.set_yticks([])
+# axs.set_ylim(axs[0].get_ylim())
+axs.tick_params(labelsize=fs)
+plt.show()
 
-    ax.add_patch(scalebar)
+fig.savefig("figs/Dickman_etal_Results_noise2.jpg", bbox_inches="tight", dpi=300)
 
-    # Optional: Add text label
-    ax.text(x_start-1, y_start + scalebar_length / 2, f'{scalebar_length} mV',
-            va='center', ha='right', color='black', fontsize=16)
-
-if __name__ == "__main__":
-
-    fs = 30
-    lw = 2.5
-
-    snnap_data = pd.read_csv(os.path.join(snnapdatapath,"synapse_vsyn2.smu.out"), sep="\t").dropna(axis=1)
-    snnap_data.columns = ["t", "VA", "VB"]
-    nw = network.Network(params_file=os.path.join(excelpath, excelfile), sim_name="main",
-                                noise=None,dt=0.01,integrator=2,atol=1e-5,eq_time=0,simdur=6000,seed=False)
-
-    nw.run(voltage_only=True)
-
-    tvec = np.array(snnap_data["t"])*1000
-    A = nw.get_interpolated_cell_data("A",tvec)
-    B = nw.get_interpolated_cell_data("B",tvec)
-    t = np.array(A["t"]) / 1000
-
-    times = np.array([(850, 1000), (1350, 1500), (1850, 2000), (2350, 2500), (2850, 3000), (3350, 3500), (3850, 4000), (4350, 4500), (4850, 5000)])
-    dt = 0.005
-    # Convert times to indices directly
-    indices = (times / dt).astype(int)
-
-    from matplotlib import colormaps
-    cmap = colormaps['coolwarm']
-    colors = [cmap(i/9) for i in range(9)]  # 10 colors from the colormap
-
-    amps_snnap = []
-    Vs_snnap = []
-
-    fig, (ax1,ax2) = plt.subplots(1, 2, figsize=(14, 7),width_ratios=[1.4,1])
-
-    # Plot in a single loop without building the ranges list
-    # for i,(start, end) in enumerate(indices):
-    #     x = np.asarray(snnap_data["t"][start:end-15]*1000 - snnap_data["t"][start]*1000)
-    #     y = np.asarray(snnap_data["VB"][start:end-15] - snnap_data["VB"][start])
-    #     Vs_snnap.append(snnap_data["VB"][start])
-    #     amps_snnap.append(max(y))
-    #     ax1.plot(x, y, label=f'{math.floor(snnap_data["VB"][end])}',color="grey",linewidth=lw,zorder=2,linestyle="dotted",alpha=0.5)
-        
-    # ax2.plot(Vs_snnap, amps_snnap,color="grey",linestyle="dashed",linewidth=lw)
-    # ax2.scatter(Vs_snnap, amps_snnap,color="grey",marker="o",s=80,zorder=2,edgecolors="none")
-    amps_nrn = []
-    Vs_nrn = []
-
-    # Plot in a single loop without building the ranges list
-    for i,(start, end) in enumerate(indices):
-        x = np.asarray(B["t"][start:end] - B["t"][start])
-        y = np.asarray(B["V"][start:end] - B["V"][start])
-        Vs_nrn.append(B["V"][start])
-        amps_nrn.append(max(y))
-        ax1.plot(x,y, label=f'{math.floor(B["V"][end])}',color=colors[i],linewidth=lw,zorder=1)
-    
-
-    ax2.plot(Vs_nrn, amps_nrn,color="black",linewidth=lw,linestyle="dashed",zorder=0)
-    ax2.scatter(Vs_nrn, amps_nrn,color=colors,marker="o",s=100,zorder=1,edgecolors="black")
-    ax2.set_xlabel("Holding potential (mV)",fontsize=fs)
-    ax2.set_xticks([-90,-70,-50,-30,-10])
-    ax1.set_xlabel("Time (ms)",fontsize=fs)
-    ax1.set_xticks([0,30,60,90,120,150])
-
-    remove_axes(ax1,remove_x=False,remove_y=False)
-    remove_axes(ax2,remove_x=False,remove_y=True)
-
-    ax1.set_ylabel(r"$V_i(t)-V_i(0)$ (mV)",fontsize=fs)
-    ax1.set_yticks([0,0.1,0.2,0.3,0.4])
-    ax2.set_ylim(ax1.get_ylim())
-    ax1.tick_params(axis="y", labelsize=22)
-    ax1.tick_params(axis='x', labelsize=22)
-    ax2.tick_params(axis='x', labelsize=22)
-
-    # ax1.set_title("Post-synaptic Potential",fontsize=20)
-    # ax2.set_title("PSP Amplitude",fontsize=20)
-    # axs[0, 0].legend(title='Holding potential',fontsize=12,bbox_to_anchor=(-0.5,0.5),loc="center left",title_fontsize='medium')
-    handles, labels = ax1.get_legend_handles_labels()
-    fig.legend(
-        handles[::-1], labels[::-1],
-        title="Holding potential",
-        title_fontsize='xx-large',
-        fontsize=fs,
-        loc="center left",
-        bbox_to_anchor=(1, 0.7),  # tweak these values for fine placement
-        frameon=False,
-        borderaxespad=0,
-        ncol=1,
-        bbox_transform=fig.transFigure
-    )
-
-    # plot_vertical_scalebar(axs[1,1],scalebar_length=0.1,bar_width=0.4,yoffset=0.05)
-    fig.tight_layout(pad=3.0)
-    fig.align_ylabels()
-    plt.show()
-    fig.savefig(os.path.join(figpath,f"{fig_prefix}_psp.jpg"), dpi=300, bbox_inches='tight')
+voltage_bias = np.mean(v) - rest_potential 
+print(f"Number of samples: {len(t)}")
+print(f"Voltage bias = {voltage_bias} mV")

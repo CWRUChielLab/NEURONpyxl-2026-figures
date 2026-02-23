@@ -1,19 +1,20 @@
-# To compile the mod files, run neuronpyxl -f gen_mods --file Excel_files/fig6.xlsx
+# To compile the mod files, neuronpyxl -f gen_mods --file Excel_files/fig7.xlsx
 
 import sys
 import os
 sys.path.append("../")
-import scienceplots
 import pandas as pd
+import scienceplots
 import matplotlib.pyplot as plt
+import numpy as np
 from neuronpyxl import network
 plt.style.use(["no-latex", "notebook"])
 
-snnapdatapath = "/media/uri/uri-external-drive/SNNAP_data/fig6"
-excelpath = "./Excel_files"
+snnapdatapath = "/media/udickman/uri-external-drive/SNNAP_data/fig7"
+excelpath = "./sheets"
 figpath = "./figs"
 fig_prefix = "Dickman_etal_Results"
-excelfile = "fig6.xlsx"
+excelfile = "fig7.xlsx"
 
 def remove_axes(ax,remove_x=True,remove_y=False):
     # For aesthetics
@@ -28,15 +29,15 @@ def remove_axes(ax,remove_x=True,remove_y=False):
         ax.spines['left'].set_visible(False)
         ax.set_yticks([])
         
-def plot_vertical_scalebar(ax,scalebar_length=20,bar_width=0.25,xoffset=1,yoffset=10):
+def plot_vertical_scalebar(ax,scalebar_length=20,bar_width=0.25,offset=0,xoffset=1,yoffset=10):
     from matplotlib.patches import Rectangle
     # Get axis limits
     xlim = ax.get_xlim()
     ylim = ax.get_ylim()
 
     # Coordinates for bottom-right corner
-    x_start = xlim[1] - bar_width - xoffset
-    y_start = ylim[0] + yoffset
+    x_start = xlim[1] - offset - bar_width
+    y_start = ylim[0] + offset + yoffset
 
     scalebar = Rectangle((x_start, y_start), width=bar_width, height=scalebar_length,
                         color='black', linewidth=0, zorder=10)
@@ -49,75 +50,52 @@ def plot_vertical_scalebar(ax,scalebar_length=20,bar_width=0.25,xoffset=1,yoffse
     
 if __name__ == "__main__":
 
+    fs = 14
     lw = 3
-    fs = 30
-    
-    nw1 = network.Network(params_file=os.path.join(excelpath, excelfile),\
-                          sim_name="synapse",noise=None,dt=-1,integrator=2,\
-                          atol=1e-5,eq_time=1000,simdur=9000,seed=False)
-    nw2 = network.Network(params_file=os.path.join(excelpath, excelfile),\
-                          sim_name="depol",noise=None,dt=-1,integrator=2,\
-                          atol=1e-5,eq_time=1000,simdur=9000,seed=False)
-    nw1.run(voltage_only=True)
-    nw2.run(voltage_only=True)
 
-    data1 = (nw1.get_cell_data("A"),nw1.get_cell_data("B"))
-    data2 = (nw2.get_cell_data("A"),nw2.get_cell_data("B"))
+    snnap_data = pd.read_csv(os.path.join(snnapdatapath,"synapse.smu.out"), sep="\t").dropna(axis=1)
+    snnap_data.columns = ["t", "V_A", "nai_A", "V_B", "nai_B", "V_C", "nai_C"]
+    tsnnap = np.asarray(snnap_data["t"])
 
-    snnap_data = pd.read_csv(os.path.join(snnapdatapath,"synapse.smu.out"),header=None,sep="\t").drop(3,axis=1)
-    snnap_data.columns = ["t","VA","VB"]
-    snnap_data = snnap_data[snnap_data["t"] >= 1]
-    snnap_data["t"] -= 1
-    snnap_data = snnap_data[snnap_data["t"] <= 9]
+    nw = network.Network(params_file=os.path.join(excelpath, excelfile), sim_name="synapse",
+                                noise=None,dt=-1,integrator=2,atol=1e-5,eq_time=5000,simdur=13000,seed=False)
 
-    snnap_data2 = pd.read_csv(os.path.join(snnapdatapath,"depol.smu.out"),header=None,sep="\t").drop(3,axis=1)
-    snnap_data2.columns = ["t","VA","VB"]
-    snnap_data2 = snnap_data2[snnap_data2["t"] >= 1]
-    snnap_data2["t"] -= 1
-    snnap_data2 = snnap_data2[snnap_data2["t"] <= 9]
+    nw.run(voltage_only=True)
 
+    A = nw.get_cell_data("A")
+    B = nw.get_cell_data("B")
+    C = nw.get_cell_data("C")
+    t = np.array(A["t"]) / 1000
+
+
+    colors = ["red", "teal", "orchid"]
     snnapcolor = "dodgerblue"
     nrncolor = "orangered"
+    fig, ax = plt.subplots(3, 1, figsize=(14,10),constrained_layout=True)
+    ax[0].plot(t, A["V"], color=nrncolor,label="NEURON",linewidth=lw)
+    ax[0].plot(tsnnap, snnap_data["V_A"], label="SNNAP", color=snnapcolor,linestyle="--",linewidth=lw)
+    # ax[0].set_ylabel("Neuron A",rotation=0,fontsize=20)
+    ax[0].legend(frameon=False,fontsize=20)
 
-    fig,(ax1,ax2) = plt.subplots(2,2,figsize=(12,8),height_ratios=(1,1))
+    ax[1].plot(t, B["V"],color=nrncolor,linewidth=lw)
+    ax[1].plot(tsnnap, snnap_data["V_B"], color=snnapcolor,linestyle="--",linewidth=lw)
+    # ax[1].set_ylabel("Neuron B",rotation=0,fontsize=20)
 
-    ax1[0].plot(data1[0]["t"]/1000,data1[0]["V"],color=nrncolor,linestyle="solid",label="NEURON",linewidth=lw)
-    ax1[0].plot(snnap_data["t"],snnap_data["VA"],color=snnapcolor,linestyle="dashed",label="SNNAP",linewidth=lw) 
-    ax1[0].set_ylim((-90,40))
-    ax1[0].set_xlim((0,10))
-    # ax1.set_ylabel("Neuron A",rotation=0,fontsize=20)
-    remove_axes(ax1[0],True,True)
-    #ax1[0].legend(frameon=False,fontsize=20)
+    ax[2].plot(t, C["V"],color=nrncolor,linewidth=lw)
+    ax[2].plot(tsnnap, snnap_data["V_C"], color=snnapcolor,linestyle="--",linewidth=lw)
+    # ax[2].set_ylabel("Neuron C",rotation=0,fontsize=20)
 
+    ax[2].set_xlabel("Time (s)",fontsize=fs)
+    ax[2].set_xticks(np.arange(0,14,step=0.5))
 
-    ax2[0].plot(data1[1]["t"]/1000,data1[1]["V"],color=nrncolor,linestyle="solid",linewidth=lw)
-    ax2[0].plot(snnap_data["t"],snnap_data["VB"],color=snnapcolor,linestyle="dashed",linewidth=lw) 
-    ax2[0].set_ylim((-90,40))
-    # ax2.set_ylabel("Neuron B",rotation=0,fontsize=20)
-    ax2[0].set_xlabel("Time (s)", fontsize=fs)
-    ax2[0].set_xlim((0,10))
-    ax2[0].set_xticks([0,0.5])
-    remove_axes(ax2[0],False,True)
-    plot_vertical_scalebar(ax2[0],scalebar_length=20,bar_width=0.025,\
-            xoffset=0.1,yoffset=50)
-                           #plot_vertical_scalebar(ax2)
+    for a in ax:
+        a.set_xlim((0,13))
 
-    ax1[1].plot(data2[0]["t"]/1000,data2[0]["V"],color=nrncolor,linestyle="solid",label="NEURON",linewidth=lw)
-    ax1[1].plot(snnap_data2["t"],snnap_data2["VA"],color=snnapcolor,linestyle="dashed",label="SNNAP",linewidth=lw) 
-    ax1[1].set_ylim((-90,40))
-    ax1[1].set_xlim((0,10))
-    # ax1.set_ylabel("Neuron A",rotation=0,fontsize=20)
-    remove_axes(ax1[1],True,True)
-    ax1[1].legend(frameon=False,fontsize=20)
+    remove_axes(ax[0],remove_x=True,remove_y=True)
+    remove_axes(ax[1],remove_x=True,remove_y=True)
+    remove_axes(ax[2],remove_x=False,remove_y=True)
 
-
-    ax2[1].plot(data2[1]["t"]/1000,data2[1]["V"],color=nrncolor,linestyle="solid",linewidth=lw)
-    ax2[1].plot(snnap_data2["t"],snnap_data2["VB"],color=snnapcolor,linestyle="dashed",linewidth=lw) 
-    ax2[1].set_ylim((-90,40))
-    # ax2.set_ylabel("Neuron B",rotation=0,fontsize=20)
-    ax2[1].set_xlabel("Time (s)", fontsize=fs)
-    ax2[1].set_xlim((0,10))
-    ax2[1].set_xticks([0,0.5])
-    remove_axes(ax2[1],False,True)
-    plt.show() 
-    fig.savefig(os.path.join(figpath,f"{fig_prefix}_es.jpg"),bbox_inches="tight",dpi=300)
+    plot_vertical_scalebar(ax[2],scalebar_length=50,bar_width=0.025,xoffset=0.1,yoffset=20)
+    plt.show()
+    # plt.tight_layout(pad=2.0, w_pad=0.5, h_pad=0.5)
+    fig.savefig(os.path.join(figpath,f"{fig_prefix}_network_plast.jpg"), bbox_inches="tight",dpi=300)

@@ -16,12 +16,7 @@
     
     ```
     neuronpyxl -f gen_mods --file sheets/fig2.xlsx && \
-    python run_script.py --name fig2 --snnap_data /path/to/snnap/data/fig2
-    ```
-    
-    ```
-    neuronpyxl -f gen_mods --file sheets/fig11.xlsx && \
-    python run_script.py --name fig11 --snnap_data /path/to/snnap/data/fig10-11
+    python run_script.py --name fig2 --snnap_data /path/to/snnap/data
     ```
     
     ```

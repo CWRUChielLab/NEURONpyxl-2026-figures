@@ -1,4 +1,16 @@
 from matplotlib.patches import Rectangle
+import argparse
+from pathlib import Path
+
+def add_snnap_path_arg():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--snnap_data",
+        required=True,
+        type=Path,
+        help="Path to SNNAP data.",
+    )
+    return parser
 
 def remove_axes(ax,remove_x=True,remove_y=False):
     # Remove axes of a matplotlib plot

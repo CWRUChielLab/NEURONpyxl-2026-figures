@@ -2,22 +2,12 @@
 
 import os
 import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
-from pathlib import Path
-import argparse
-from utility import remove_axes,plot_vertical_scalebar
+from utility import remove_axes,plot_vertical_scalebar,add_snnap_path_arg
 from neuronpyxl import Network
 from neuron import h
 
-# Parse arguments
-parser = argparse.ArgumentParser()
-parser.add_argument(
-    "--snnap_data",
-    required=True,
-    type=Path,
-    help="Path to SNNAP data.",
-)
+parser = add_snnap_path_arg()
 
 excelpath = "./sheets"
 figpath = "./figs"

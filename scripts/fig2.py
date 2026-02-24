@@ -4,19 +4,10 @@ import numpy as np
 import pandas as pd
 from scipy.stats import linregress
 from matplotlib.lines import Line2D
-import argparse
-from pathlib import Path
 from neuronpyxl import Network
-from utility import remove_axes
+from utility import remove_axes,add_snnap_path_arg
 
-# Parse arguments
-parser = argparse.ArgumentParser()
-parser.add_argument(
-    "--snnap_data",
-    required=True,
-    type=Path,
-    help="Path to SNNAP data.",
-)
+parser = add_snnap_path_arg()
 
 excelpath = "./sheets"
 figpath = "./figs"

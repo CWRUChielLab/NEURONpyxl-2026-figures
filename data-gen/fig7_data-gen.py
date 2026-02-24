@@ -1,10 +1,12 @@
 import os
 import pandas as pd
+from pathlib import Path
 from neuronpyxl import Network
 
 excelpath = "./sheets"
 excelfile = "fig7.xlsx"
-savepath = "./data"
+savepath = "./data/fig7"
+Path(savepath).mkdir(parents=True, exist_ok=True)
 
 freq = 50
 weight = 1e-5
@@ -25,4 +27,4 @@ if __name__ == "__main__":
     nw.run()
 
     data = nw.get_cell_data("B4")
-    pd.DataFrame(data).to_hdf(os.path.join(savepath,"fig7_noisy_B4_data.h5"))
+    pd.DataFrame(data).to_hdf(os.path.join(savepath,"noisy_B4_data.h5"))

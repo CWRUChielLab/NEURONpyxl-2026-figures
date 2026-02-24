@@ -13,7 +13,7 @@ excelfile = "fig7.xlsx"
 figpath = "./figs"
 
 def gaussian(x, A, mu, sigma):
-        return 1/np.sqrt(2*np.pi)/A * np.exp(-(x - mu)**2 / (2 * sigma**2))
+    return 1/np.sqrt(2*np.pi)/A * np.exp(-(x - mu)**2 / (2 * sigma**2))
 
 
 def gaussian_fit(counts,bins,data):    

@@ -1,133 +1,222 @@
-import numpy as np
-import sys
-import os
 import pandas as pd
-from scipy.interpolate import griddata
-from scipy.ndimage import gaussian_filter
 import scienceplots
 import matplotlib.pyplot as plt
-from matplotlib.lines import Line2D  # For legend
+import sys
+import numpy as np
+import os
+import pandas as pd
 plt.style.use(["no-latex", "notebook"])
 datapath = os.path.join(os.getcwd(),"Dickman_etal_2025_Figures/Data/fig12-13")
 sys.path.append(datapath)
-figpath = "./figs"
+figpath = "figs"
 sys.path.append(figpath)
 fig_prefix = "Dickman_etal_Results"
-xfontsize = 30
-yfontsize = 30
-titlefont_size = 30
-param1 = "vdg_g_B64s_kpp"
-param2 = "cs_g_B30_B63_fast"
-filename = "results.csv"
-#####################################################################
 
-chiel_data = pd.read_csv(os.path.join(datapath, "gillchiel_2020_data.csv"), header=[0,1,2])
-bmp_dur = {"retraction": {"loaded":chiel_data[("loaded","retraction","dur")].mean(), \
-                          "unloaded": chiel_data[("unloaded","retraction","dur")].mean()},\
-           "protraction": {"loaded":chiel_data[("loaded","protraction","dur")].mean(), \
-                           "unloaded": chiel_data[("unloaded","protraction","dur")].mean()}\
+def remove_axes1(ax):
+    ax.xaxis.set_ticks_position('bottom')
+    ax.yaxis.set_ticks_position('left')
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+
+def remove_axes2(ax, x=False):
+    ax.spines["left"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["top"].set_visible(False)
+    ax.spines["bottom"].set_visible(x)
+    ax.set_yticks([])
+    ax.tick_params(right=False,top=False,left=False,bottom=x)
+
+tick_fontsize = 22
+label_fontsize = 25
+title_fontsize=25
+legend_fontsize=22
+
+fig = plt.figure(figsize=(14,10),constrained_layout=True)
+sfigs = fig.subfigures(1,2, width_ratios=(2,1.25))
+ax1 = sfigs[1].subplots(1,1)
+ax2 = sfigs[0].subplots(2,2,sharey=True,sharex=True)
+
+# FIRST RUN bmp_test.py
+speed = "slow"
+############################### BARCHART ####################################
+chiel_data = pd.read_csv(os.path.join(datapath,"gillchiel_2020_data.csv"), header=[0,1,2])
+mean_data = pd.read_csv(os.path.join(datapath,"meandur.csv"), index_col=[0,1,2]).T
+
+groups = ["protraction","retraction"]
+pairs = ["Data", "CPG"]
+conditions = ["loaded","unloaded"]
+colors = {"loaded": "mediumspringgreen", "unloaded": "fuchsia"}  # color by species
+hatches = {"Data": "", "CPG": "//"}  # hatch by dataset
+data = {}
+for s in conditions:
+    data.setdefault(s,{})
+    for phase in groups:
+        d = np.mean(chiel_data[(s,phase)]["dur"])
+        e = np.sqrt(np.sum(np.square(chiel_data[(s,phase)]["err"])))
+        data[s].setdefault(phase,{})
+        data[s][phase] = {"dur": d,
+                          "err": e}
+cpg = {}
+for s in conditions:
+    cpg.setdefault(s,{})
+    for phase in groups:
+        d = np.mean(mean_data[(s,phase,"dur")])/1000
+        e = np.mean(mean_data[(s,phase,"err")])/1000/np.sqrt(mean_data[(s,phase,"err")])
+        cpg[s].setdefault(phase,{})
+        cpg[s][phase] = {"dur": d,
+                        "err": e}
+
+all_data = {
+    "Data": data,
+    "CPG": cpg
+}
+
+
+x = np.array([0,1])
+width = 0.2
+x_tick_positions = x + width / 2 - 0.1
+# total_bars = len(conditions) * len(datasets)
+ec = "black"
+alpha = 0.7
+num_datasets = len(pairs) * len(conditions)
+bar_width = 0.15
+group_offset = (num_datasets - 1) * bar_width / 2  # to center the bars
+
+for i, group in enumerate(groups):  # protraction, retraction
+    bar_count = 0
+    for j, condition in enumerate(conditions):  # loaded, unloaded
+        for k, dataset in enumerate(pairs):  # Data, CPG, SNNAP
+            xpos = x[i] - group_offset + bar_count * bar_width
+            ax1.bar(
+                xpos,
+                all_data[dataset][condition][group]["dur"],
+                bar_width,
+                color=colors[condition],
+                hatch=hatches[dataset],
+                yerr=all_data[dataset][condition][group]["err"],
+                error_kw=dict(ecolor=ec, linewidth=2),
+                capsize=4,
+                edgecolor=ec,
+                alpha=1,
+                linewidth=2
+            )
+            bar_count += 1
+# Formatting
+ax1.set_xticks(x_tick_positions)
+ax1.set_xticklabels([g.capitalize() for g in groups], ha="center")
+ax1.tick_params(axis='x', length=0,labelsize=label_fontsize)
+ax1.set_yticks([0,1,2,3,4])
+ax1.tick_params(axis='y', labelsize=22) 
+ax1.set_ylabel("Duration (s)",fontsize=label_fontsize)
+
+from matplotlib.patches import Patch
+
+legend_patches = [
+    Patch(facecolor=colors["loaded"], edgecolor=ec,label="Loaded"),  # Solid blue
+    Patch(facecolor=colors["unloaded"], edgecolor=ec, label="Unloaded"),  # Striped red,
+    Patch(facecolor="white", edgecolor=ec, hatch="//", label="Simulation"),  # Solid blue
+    # Patch(facecolor="white", edgecolor=ec, hatch="x", label="SNNAP"),  # Solid blue
+    Patch(facecolor="white", edgecolor=ec, label="Experiment")  # Striped red,
+]
+
+ax1.legend(handles=legend_patches,loc="upper left",frameon=False,fontsize=20)
+remove_axes1(ax1)
+
+############################### ALIGNED ####################################
+
+
+#data_control = pd.read_csv(os.path.join(datapath, f"data_test_control.csv")).drop(["Unnamed: 0"], axis=1)
+data_l = pd.read_csv(os.path.join(datapath, f"data_test_loaded.csv")).drop(["Unnamed: 0"], axis=1)
+data_ul = pd.read_csv(os.path.join(datapath, f"data_test_unloaded.csv")).drop(["Unnamed: 0"], axis=1)
+
+
+def align_time(x,y,start_time,delta=10000):
+    x_shifted = x - start_time
+    mask = (x_shifted >= -delta) & (x_shifted <= delta)
+    return x_shifted[mask]/1000, y[mask]
+
+def bmp_times(x,y,alignment):
+    zeros = np.where(np.diff(np.signbit(y)))[0]
+    zero_times = np.array(x[zeros])
+    i_end = np.where(np.diff(zero_times) > 4000)[0]
+    bmp_end = zero_times[i_end][1]
+    bmp_start = zero_times[i_end+1][1]
+    
+    if alignment == "start":
+        return align_time(x,y,bmp_start)
+    return align_time(x,y,bmp_end)
+
+
+#control = {"protraction": bmp_times(data_control["t"],data_control["V_B31a"],"end"),
+#            "retraction": bmp_times(data_control["t"],data_control["V_B64a"],"start")
+#           }
+
+loaded = {"protraction": bmp_times(data_l["t"],data_l["V_B31a"],"end"),
+            "retraction": bmp_times(data_l["t"],data_l["V_B64a"],"start")
            }
-print(bmp_dur)
-def mindur(param1, param2, df, d1_col, d2_col, d1target, d2target):
-    errors = np.sqrt((df[d1_col] - d1target) ** 2 + (df[d2_col] - d2target) ** 2)
-    min_idx = errors.idxmin()  # Get index of minimum error
-    row = df.iloc[min_idx]
-    print(row)
-    return {param1: row[param1], param2: row[param2]}
 
-def get_params():
-    # if speed == "fast":
+unloaded = {"protraction": bmp_times(data_ul["t"],data_ul["V_B31a"],"end"),
+            "retraction": bmp_times(data_ul["t"],data_ul["V_B64a"],"start")
+           }
 
-    file = os.path.join(datapath, filename)
-    df = pd.read_csv(file, header=0).dropna(axis=0) 
-    d1target = bmp_dur["protraction"]["loaded"]*1000
-    d2target = bmp_dur["retraction"]["loaded"]*1000
-    md_loaded = mindur(param1, param2, df,"protraction","retraction",d1target,d2target)
+def plot_vertical_scalebar(ax,scalebar_length=100,bar_width=0.25,offset=0,yoffset=10):
+    from matplotlib.patches import Rectangle
+    # Get axis limits
+    xlim = ax.get_xlim()
+    ylim = ax.get_ylim()
 
-    d1target = bmp_dur["protraction"]["unloaded"]*1000
-    d2target = bmp_dur["retraction"]["unloaded"]*1000
-    md_unloaded = mindur(param1, param2, df,"protraction","retraction",d1target,d2target)
-    
-    return {"loaded": md_loaded, "unloaded": md_unloaded}
+    # Coordinates for bottom-right corner
+    x_start = xlim[1] - offset - bar_width
+    y_start = ylim[0] + offset + yoffset
 
+    scalebar = Rectangle((x_start, y_start), width=bar_width, height=scalebar_length,
+                        color='black', linewidth=0, zorder=10)
 
-params = get_params()
-print(params)
-file = os.path.join(datapath, filename)
-df = pd.read_csv(file, header=0).dropna(axis=0)
-df["protraction"] /= 1000
-df["retraction"] /= 1000
-df["std1"] /= 1000
-df["std2"] /= 1000
+    ax.add_patch(scalebar)
 
-df["cv1"] = df["std1"] / df["protraction"]
-df["cv2"] = df["std2"] / df["retraction"]
+    # Optional: Add text label
+    ax.text(x_start, y_start + scalebar_length / 2, f'{scalebar_length} mV',
+            va='center', ha='right', color='black', fontsize=16)
 
-def plot_ax(bmp, ax, sigma, delta, ylabel=True, contour=True,cv=False):
-    xcol = param1
-    ycol = param2
-    
-    # x = df[xcol].to_numpy()
-    # y = df[ycol].to_numpy()
-    # z = df[bmp].to_numpy()
+colors = {"retraction": "dodgerblue", "protraction": "red"}
 
-    # if contour:
-    #     vmax = max(max(df["protraction"]), max(df["retraction"]))
-    #     vmin = min(min(df["protraction"]), min(df["retraction"]))
-    # elif cv:
-    #     vmax = max(max(df["cv1"]), max(df["cv2"]))
-    #     vmin = max(min(df["cv1"]), min(df["cv2"]))
-    # else:
-    #     vmax = max(max(df["std1"]), max(df["std2"]))
-    #     vmin = max(min(df["std1"]), min(df["std2"]))
+for ax in ax2.flat:
+    ax.set_xlim((-5, 5))
 
-    df_pivot = df.pivot_table(index=ycol, columns=xcol, values=bmp)
-    mesh = ax.pcolormesh(df_pivot.columns, df_pivot.index, df_pivot.values,\
-                         cmap="coolwarm", shading="auto",vmin=None,vmax=None)
-    ax.set_title(bmp.capitalize(), fontsize=titlefont_size)
-    
-    ax.scatter([params["loaded"][xcol]], [params["loaded"][ycol]], marker="*", c="springgreen",\
-               edgecolors="white", s=800, linewidths=1.5,alpha=1,zorder=2,label="Loaded")
-    ax.scatter([params["unloaded"][xcol]], [params["unloaded"][ycol]], marker="*", c="magenta",\
-            edgecolors="white", s=800, linewidths=1.5,alpha=1,zorder=2,label="Unloaded")
-    return mesh
+#ax2[0,0].plot(*control["protraction"], c=colors["protraction"])
+#ax2[0,0].set_ylabel("Control", fontsize=label_fontsize,rotation=0)
+ax2[0,0].set_title("Protraction", fontsize=title_fontsize)
+ax2[0,1].set_title("Retraction", fontsize=title_fontsize)
 
-fig,axs = plt.subplots(1,2,figsize=(14,10), constrained_layout=True)
+ax2[0,0].plot(*loaded["protraction"], c=colors["protraction"])
+ax2[0,0].set_ylabel("Loaded", fontsize=label_fontsize,rotation=0)
+remove_axes2(ax2[0,0])
 
-# PLOT BMP DURATIONS
-pc11 = plot_ax("protraction", axs[0], 1.4, 0.2,True,True,False)
-pc21 = plot_ax("retraction", axs[1], 1.5, 0.2, False,True,False)
+ax2[1,0].plot(*unloaded["protraction"], c=colors["protraction"])
+ax2[1,0].set_ylabel("Unloaded", fontsize=label_fontsize,rotation=0)
+remove_axes2(ax2[1,0],x=True)
 
-axs[1].set_yticklabels([])
+#ax2[0,1].plot(*control["retraction"], c=colors["retraction"])
+#ax2[0,1].set_title("Retraction", fontsize=title_fontsize)
+#remove_axes2(ax2[0,1])
 
-axs[0].set_ylabel(r"$\bar{g}$ of B30 to B63 connection ($\mu$S)")
-# PLOT STANDARD ERRORS
+ax2[0,1].plot(*loaded["retraction"], c=colors["retraction"])
+remove_axes2(ax2[0,1])
 
-error = "cv"
-axs[0].set_xlabel(r"$\bar{g}$ of slow potassium in B64s ($\mu$S)",fontsize=xfontsize)
-axs[0].set_ylabel(r"$\bar{g}$ of B30 to B63 connection ($\mu$S)",fontsize=xfontsize)
-axs[1].set_xlabel(r"$\bar{g}$ of slow potassium in B64s ($\mu$S)",fontsize=xfontsize)
-axs[0].tick_params(axis="x",labelsize=xfontsize)
-axs[1].tick_params(axis="x",labelsize=xfontsize)
-axs[0].tick_params(axis="y",labelsize=xfontsize)
+ax2[1,1].plot(*unloaded["retraction"], c=colors["retraction"])
+remove_axes2(ax2[1,1],x=True)
 
-orientation = "horizontal"
-location = "bottom"
-shrink = 0.7
-c1 = fig.colorbar(pc11, ax=axs[0], shrink=shrink, location=location,\
-               pad=0.05,orientation=orientation)
-c2 = fig.colorbar(pc21, ax=axs[1], shrink=shrink, location=location,\
-        pad=0.05,orientation=orientation)
-c1.ax.tick_params(labelsize=22)
-c2.ax.tick_params(labelsize=22)
-c1.set_label("Phase duration (s)", fontsize=30)
-c2.set_label("Phase duration (s)", fontsize=30)
-# legend_labels = ["Loaded", "Unloaded"]
-plt.legend(fontsize=30)
+plot_vertical_scalebar(ax2[1,1],scalebar_length=20,bar_width=0.15,yoffset=17)
 
-for ax_group in [axs]:
-    for ax in ax_group:
-        ax.set(adjustable='box', aspect=1.0/ax.get_data_ratio())
-plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=0.0005, hspace=0)
+############################### PLOT ####################################
+
+# sfig_labels = ['A', 'B']
+
+# for subfig, label in zip(sfigs, sfig_labels):
+#     # Add label to the upper left of each subfigure
+#     subfig.suptitle(label, x=0.0, y=1.04, ha='left', va='top', fontsize=22, fontweight='bold')
+
+# plt.show()
+sfigs[1].align_ylabels()
 plt.show()
-fig.savefig(os.path.join(figpath,f"{fig_prefix}_heatmap2.jpg"),bbox_inches="tight",dpi=300)
+fig.savefig(os.path.join(figpath,f"{fig_prefix}_bar.png"), bbox_inches="tight",dpi=300)

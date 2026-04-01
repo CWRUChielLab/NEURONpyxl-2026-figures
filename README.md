@@ -1,3 +1,7 @@
+Figures 10 and 11 aren't working yet.
+Has been made public for access to the reviewers.
+This will be fixed asap.
+
 # Figures from Dickman, U., et al. (2026)
 
 1. Download the SNNAP simulation data from [Dryad](https://datadryad.org/dataset/doi:10.5061/dryad.1c59zw488) and make note of the download location.

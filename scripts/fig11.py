@@ -1,162 +1,133 @@
-excelpath = "/home/uri/my-files/projects/cwru/neuronpyxl/sheets"
-figpath = "/home/uri/my-files/projects/cwru/neuronpyxl/figs"
-datapath = "/home/uri/my-files/projects/cwru/neuronpyxl/Data"
-excelfile = "fig11-12-13.xlsx"
-fig_prefix = "Dickman_etal_Results"
-
-import sys
-import subprocess
-import os
-sys.path.append("../neuronpyxl")
-# subprocess.run(f"yes | neuronpyxl -f gen_mods --file {os.path.join(excelpath,excelfile)}",shell=True,check=True)
-
-from neuronpyxl import network
-import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
-import os
 import sys
-import matplotlib.patches as mpatches
-from matplotlib.lines import Line2D
-
-
-def set_params(nw:network.Network,v1,v2):
-    nw.cells["B64s"].section(0.5).g_neuronpyxl_kpp = v1
-    nw.chemical_synapses["fast"]["B30"]["B63"]["synapse"].g = v2
-
-legend_labels = {"forestgreen": "Command-like",
-                 "orangered": "Protraction",
-                 "purple": "Closure",
-                 "teal": "Retraction",
-                 "black": "Retraction terminating"
-                }
-
-colors = {
-    "forestgreen": ["CBI2"], # command-like neuron
-    "orangered": ["B20", "B30", "B31a", "B34", "B35", "B40", "B63"], # protraction
-    "purple": ["B8"], # closure
-    "teal": ["B51s", "B51a", "B64a","B4"], # retraction
-    "black": ["B52"] # retraction termination
-}
-
-all_cells = [(cell, color) for color, cells in colors.items() for cell in cells]
-num_cells = len(all_cells)
-# folder = "Control"
-# file = pd.HDFStore(os.path.join(datapath, folder, "BMP_data.h5"))
-# data = file["data"]
-#noise_params = None
-noise_params = (200,1e-4,8)
-
+import os
+import pandas as pd
+from scipy.interpolate import griddata
+from scipy.ndimage import gaussian_filter
+import scienceplots
+import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D  # For legend
+plt.style.use(["no-latex", "notebook"])
+datapath = os.path.join(os.getcwd(),"Dickman_etal_2025_Figures/Data/fig12-13")
+sys.path.append(datapath)
+figpath = "./figs"
+sys.path.append(figpath)
+fig_prefix = "Dickman_etal_Results"
+xfontsize = 30
+yfontsize = 30
+titlefont_size = 30
 param1 = "vdg_g_B64s_kpp"
 param2 = "cs_g_B30_B63_fast"
-params = {'loaded': {
-                    param1: 0.7423728813559323,
-                    param2: 2.535593220338983
-        }, 'unloaded': {
-                    param1: 1.0728813559322037,
-                    param2: 1.3915254237288135
-        }, 'control': {
-                    param1: 0.35,
-                    param2: 0.25
-        
-        }
-}
+filename = "results.csv"
+#####################################################################
 
-nw = network.Network(
-        params_file=os.path.join(excelpath,excelfile),
-        sim_name="BMP",noise=noise_params,dt=-1,integrator=2,atol=1e-5,
-        eq_time=10000,simdur=150000,seed=False
-        )
+chiel_data = pd.read_csv(os.path.join(datapath, "gillchiel_2020_data.csv"), header=[0,1,2])
+bmp_dur = {"retraction": {"loaded":chiel_data[("loaded","retraction","dur")].mean(), \
+                          "unloaded": chiel_data[("unloaded","retraction","dur")].mean()},\
+           "protraction": {"loaded":chiel_data[("loaded","protraction","dur")].mean(), \
+                           "unloaded": chiel_data[("unloaded","protraction","dur")].mean()}\
+           }
+print(bmp_dur)
+def mindur(param1, param2, df, d1_col, d2_col, d1target, d2target):
+    errors = np.sqrt((df[d1_col] - d1target) ** 2 + (df[d2_col] - d2target) ** 2)
+    min_idx = errors.idxmin()  # Get index of minimum error
+    row = df.iloc[min_idx]
+    print(row)
+    return {param1: row[param1], param2: row[param2]}
 
-condition = "control"
-#set_params(nw,params[condition][param1],params[condition][param2])
-nw.run(voltage_only=True)
+def get_params():
+    # if speed == "fast":
 
-data = {}
-for name,_ in nw.cells.items():
-    cell_data = nw.get_cell_data(name)
-    if "t" not in data:
-        data["t"] = cell_data["t"]
-    data[f"V_{name}"] = cell_data["V"]
+    file = os.path.join(datapath, filename)
+    df = pd.read_csv(file, header=0).dropna(axis=0) 
+    d1target = bmp_dur["protraction"]["loaded"]*1000
+    d2target = bmp_dur["retraction"]["loaded"]*1000
+    md_loaded = mindur(param1, param2, df,"protraction","retraction",d1target,d2target)
 
-
-import matplotlib.ticker as ticker
-def xtickson(ax,ticks):
-    ax.tick_params(axis='x', which='both', bottom=True, top=False)
-    ax.spines["bottom"].set_visible(True)
-    # Specify number of ticks on x-axis
-    ax.set_xticks(ticks)
-
-def ylabel(ax,text):
-    ax.text(-0.05, 0.5, text, transform=ax.transAxes,
-        rotation=0, va='center', ha='center', fontsize=18)
-
-def plot_bmps(data,axs,all_cells,xlim=(0,65),snnap=True,ylab=False):
-    if num_cells == 1:
-        axs = [axs]  # Ensure axes is a list when there's only one subplot
-    t = np.array(data["t"])
-    if not snnap:
-        t /= 1000
-
-    # Plot data from each cell
-    for ax, (cell, color) in zip(axs, all_cells):
-        if snnap:
-            ind = np.where(t > 10)[0]
-            t = np.array(t[ind])
-            t -= t[0]
-            V = data[f"V_{cell}"][ind]
-        else:
-            V = data[f"V_{cell}"]
-        
-        ax.plot(t, V, color=color, linewidth=1,label=None)
-        ax.spines['left'].set_visible(False)
-        ax.set_yticks([])
-        ax.set_xlim(xlim)
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        ax.spines['bottom'].set_visible(False)
-        ax.set_xticks([])
-        if ylab:
-            ylabel(ax,cell)
+    d1target = bmp_dur["protraction"]["unloaded"]*1000
+    d2target = bmp_dur["retraction"]["unloaded"]*1000
+    md_unloaded = mindur(param1, param2, df,"protraction","retraction",d1target,d2target)
+    
+    return {"loaded": md_loaded, "unloaded": md_unloaded}
 
 
-def plot_vertical_scalebar(ax,scalebar_length=100,bar_width=0.25,xoffset=0,yoffset=0):
-    from matplotlib.patches import Rectangle
-    # Get axis limits
-    xlim = ax.get_xlim()
-    ylim = ax.get_ylim()
+params = get_params()
+print(params)
+file = os.path.join(datapath, filename)
+df = pd.read_csv(file, header=0).dropna(axis=0)
+df["protraction"] /= 1000
+df["retraction"] /= 1000
+df["std1"] /= 1000
+df["std2"] /= 1000
 
-    # Coordinates for bottom-right corner
-    x_start = xlim[1] + xoffset - bar_width
-    y_start = ylim[0] + yoffset
+df["cv1"] = df["std1"] / df["protraction"]
+df["cv2"] = df["std2"] / df["retraction"]
 
-    scalebar = Rectangle((x_start, y_start), width=bar_width, height=scalebar_length,
-                        color='black', linewidth=0, zorder=10)
+def plot_ax(bmp, ax, sigma, delta, ylabel=True, contour=True,cv=False):
+    xcol = param1
+    ycol = param2
+    
+    # x = df[xcol].to_numpy()
+    # y = df[ycol].to_numpy()
+    # z = df[bmp].to_numpy()
 
-    ax.add_patch(scalebar)
+    # if contour:
+    #     vmax = max(max(df["protraction"]), max(df["retraction"]))
+    #     vmin = min(min(df["protraction"]), min(df["retraction"]))
+    # elif cv:
+    #     vmax = max(max(df["cv1"]), max(df["cv2"]))
+    #     vmin = max(min(df["cv1"]), min(df["cv2"]))
+    # else:
+    #     vmax = max(max(df["std1"]), max(df["std2"]))
+    #     vmin = max(min(df["std1"]), min(df["std2"]))
 
-    # Optional: Add text label
-    ax.text(x_start - 1, y_start + scalebar_length / 2, f'{scalebar_length} mV',
-            va='center', ha='right', color='black', fontsize=12)
-            
-            
-fig,ax = plt.subplots(num_cells,1,figsize=(14,10),sharey=True,constrained_layout=True)
-plot_bmps(data,ax,all_cells, (0,nw.simdur/1000),False,True)
-xtickson(ax[-1],[0,30,60,90,120,150])
-plot_vertical_scalebar(ax[-2],yoffset=30)
-fig.supxlabel("Time (s)",x=0.53,y=0.04)
+    df_pivot = df.pivot_table(index=ycol, columns=xcol, values=bmp)
+    mesh = ax.pcolormesh(df_pivot.columns, df_pivot.index, df_pivot.values,\
+                         cmap="coolwarm", shading="auto",vmin=None,vmax=None)
+    ax.set_title(bmp.capitalize(), fontsize=titlefont_size)
+    
+    ax.scatter([params["loaded"][xcol]], [params["loaded"][ycol]], marker="*", c="springgreen",\
+               edgecolors="white", s=800, linewidths=1.5,alpha=1,zorder=2,label="Loaded")
+    ax.scatter([params["unloaded"][xcol]], [params["unloaded"][ycol]], marker="*", c="magenta",\
+            edgecolors="white", s=800, linewidths=1.5,alpha=1,zorder=2,label="Unloaded")
+    return mesh
 
-for color, label in legend_labels.items():
-    ax[-1].plot([], [], color=color, label=label,linewidth=2)
+fig,axs = plt.subplots(1,2,figsize=(14,10), constrained_layout=True)
 
-# Add legend at the bottom center, in one row
-ax[-1].legend(
-    loc='upper center',
-    bbox_to_anchor=(0.5, -1.2),  # Centered, adjust vertical position if needed
-    ncol=len(legend_labels),     # All in one row
-    frameon=False,                 # Optional: removes legend box,
-    fontsize=14
-)
+# PLOT BMP DURATIONS
+pc11 = plot_ax("protraction", axs[0], 1.4, 0.2,True,True,False)
+pc21 = plot_ax("retraction", axs[1], 1.5, 0.2, False,True,False)
 
-fig.savefig(os.path.join(figpath,f"{fig_prefix}_cpg_updated{'' if noise_params is None else '_noise'}.png"),dpi=300)
+axs[1].set_yticklabels([])
+
+axs[0].set_ylabel(r"$\bar{g}$ of B30 to B63 connection ($\mu$S)")
+# PLOT STANDARD ERRORS
+
+error = "cv"
+axs[0].set_xlabel(r"$\bar{g}$ of slow potassium in B64s ($\mu$S)",fontsize=xfontsize)
+axs[0].set_ylabel(r"$\bar{g}$ of B30 to B63 connection ($\mu$S)",fontsize=xfontsize)
+axs[1].set_xlabel(r"$\bar{g}$ of slow potassium in B64s ($\mu$S)",fontsize=xfontsize)
+axs[0].tick_params(axis="x",labelsize=xfontsize)
+axs[1].tick_params(axis="x",labelsize=xfontsize)
+axs[0].tick_params(axis="y",labelsize=xfontsize)
+
+orientation = "horizontal"
+location = "bottom"
+shrink = 0.7
+c1 = fig.colorbar(pc11, ax=axs[0], shrink=shrink, location=location,\
+               pad=0.05,orientation=orientation)
+c2 = fig.colorbar(pc21, ax=axs[1], shrink=shrink, location=location,\
+        pad=0.05,orientation=orientation)
+c1.ax.tick_params(labelsize=22)
+c2.ax.tick_params(labelsize=22)
+c1.set_label("Phase duration (s)", fontsize=30)
+c2.set_label("Phase duration (s)", fontsize=30)
+# legend_labels = ["Loaded", "Unloaded"]
+plt.legend(fontsize=30)
+
+for ax_group in [axs]:
+    for ax in ax_group:
+        ax.set(adjustable='box', aspect=1.0/ax.get_data_ratio())
+plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=0.0005, hspace=0)
 plt.show()
+fig.savefig(os.path.join(figpath,f"{fig_prefix}_heatmap2.jpg"),bbox_inches="tight",dpi=300)

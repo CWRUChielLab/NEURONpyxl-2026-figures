@@ -1,23 +1,16 @@
-# Run these commands to generate the data first
-# neuronpyxl -f gen_mods --file Excel_files/fig10.xlsx
-# neuronpyxl -f run_sim --file Excel_files/fig10.xlsx --name BMP --noise 50 1e-5 25 --duration 75000 --teq 10000 --vonly --folder fig10data
-
-snnapdatapath = "/media/uri/uri-external-drive/SNNAP_data/fig10"
-datapath = "/home/uri/my-files/projects/cwru/neuronpyxl/Dickman_etal_2025_Figures/Data"
-excelpath = "./Excel_files"
-figpath = "./figs"
-fig_prefix = "Dickman_etal_Results"
-excelfile = "fig10.xlsx"
-
-import matplotlib.pyplot as plt
-from matplotlib import rcParams 
-from matplotlib.lines import Line2D
-import scienceplots
 import numpy as np
+import os
+import matplotlib.pyplot as plt
 import pandas as pd
 import os
-import sys
-plt.style.use(["no-latex", "notebook"])
+from matplotlib.lines import Line2D
+from utility import add_snnap_path_arg
+
+parser = add_snnap_path_arg()
+
+excelpath = "./sheets"
+excelfile = "fig9.xlsx"
+figpath = "./figs"
 
 legend_labels = {"darkorange": "CBI-2",
                  "red": "Protraction",
@@ -104,17 +97,20 @@ def remove_axes(ax):
 
 if __name__ == "__main__":
 
+    args = parser.parse_args()
+    data_folder = os.path.join(args.snnap_data,"fig9")
+
     snnap_data = {
-            "clean": (pd.read_csv(os.path.join(snnapdatapath,"BMP_clean1.smu.out"), sep="\t", header=None).dropna(axis=1),
-                      pd.read_csv(os.path.join(snnapdatapath,"BMP_clean2.smu.out"), sep="\t", header=None).dropna(axis=1)),
-            "noisy": (pd.read_csv(os.path.join(snnapdatapath,"BMP_noise1.smu.out"), sep="\t", header=None).dropna(axis=1),
-                      pd.read_csv(os.path.join(snnapdatapath,"BMP_noise2.smu.out"), sep="\t", header=None).dropna(axis=1))
+            "clean": (pd.read_csv(os.path.join(data_folder,"snnap","BMP_clean1.smu.out"), sep="\t", header=None).dropna(axis=1),
+                      pd.read_csv(os.path.join(data_folder,"snnap","BMP_clean2.smu.out"), sep="\t", header=None).dropna(axis=1)),
+            "noisy": (pd.read_csv(os.path.join(data_folder,"snnap","BMP_noise1.smu.out"), sep="\t", header=None).dropna(axis=1),
+                      pd.read_csv(os.path.join(data_folder,"snnap","BMP_noise2.smu.out"), sep="\t", header=None).dropna(axis=1))
             }
     nrn_data = {
-            "clean": (pd.HDFStore(os.path.join(datapath,"fig10data/BMP_clean1.h5"))["membrane"],
-                      pd.HDFStore(os.path.join(datapath,"fig10data/BMP_clean2.h5"))["membrane"]),
-            "noisy": (pd.HDFStore(os.path.join(datapath,"fig10data/BMP_noise1.h5"))["membrane"],
-                      pd.HDFStore(os.path.join(datapath,"fig10data/BMP_noise2.h5"))["membrane"])
+            "clean": (pd.HDFStore(os.path.join(data_folder,"nrn","BMP_clean1.h5"))["membrane"],
+                      pd.HDFStore(os.path.join(data_folder,"nrn","BMP_clean2.h5"))["membrane"]),
+            "noisy": (pd.HDFStore(os.path.join(data_folder,"nrn","BMP_noise1.h5"))["membrane"],
+                      pd.HDFStore(os.path.join(data_folder,"nrn","BMP_noise2.h5"))["membrane"])
             }
     
     snnapcols = ["t","V_B20","V_B30","V_B31a","V_B34","V_B35","V_B4",\
@@ -131,18 +127,15 @@ if __name__ == "__main__":
     # Create figure
     xlim = (0,75)
         
-    fig = plt.figure(figsize=(10,6),constrained_layout=True)
-    sfigs = fig.subfigures(1,2, width_ratios=(1.1,1))
-    ax1 = sfigs[0].subplots(num_cells,1,sharey=True)
-    ax2 = sfigs[1].subplots(num_cells,1,sharey=True)
-    # ax3 = sfigs[1,0].subplots(2,1,sharey=True)
-    # ax4 = sfigs[1,1].subplots(2,1,sharey=True)
+    fig = plt.figure(figsize=(25,10),constrained_layout=True)
+    sfigs = fig.subfigures(2,2, width_ratios=(1.1,1),height_ratios=(2.5,1))
+    ax1 = sfigs[0,0].subplots(num_cells,1,sharey=True)
+    ax2 = sfigs[0,1].subplots(num_cells,1,sharey=True)
+    ax3 = sfigs[1,0].subplots(2,1,sharey=True)
+    ax4 = sfigs[1,1].subplots(2,1,sharey=True)
 
     plot_bmps(snnap_data["noisy"][1],ax1,all_cells, xlim,True,True)
     plot_bmps(nrn_data["noisy"][0],ax2,all_cells,xlim,False,False)
-
-    # ax1.suptitle("SNNAP",fontsize=30)
-    # ax2.suptitle("NEURON",fontsize=30)
 
     handles, labels = plt.gca().get_legend_handles_labels()
     extension = []
@@ -188,6 +181,30 @@ if __name__ == "__main__":
     bcolor1 = "black"
     bcolor2 = "forestgreen"
 
+    ax3[0].plot(traces_snnap["clean"]["t"][0]-traces_snnap["clean"]["t"][0][0],traces_snnap["clean"]["V"][0],color=bcolor1)
+    ax3[0].plot(traces_snnap["clean"]["t"][1]-traces_snnap["clean"]["t"][1][0],traces_snnap["clean"]["V"][1],color=bcolor2)
+    ax3[1].plot(traces_snnap["noisy"]["t"][0]-traces_snnap["noisy"]["t"][0][0],traces_snnap["noisy"]["V"][0],color=bcolor1)
+    ax3[1].plot(traces_snnap["noisy"]["t"][1]-traces_snnap["noisy"]["t"][1][0],traces_snnap["noisy"]["V"][1],color=bcolor2)
+
+    ax4[0].plot(traces_nrn["clean"]["t"][0]-traces_nrn["clean"]["t"][0][0],traces_nrn["clean"]["V"][0],color=bcolor1)
+    ax4[0].plot(traces_nrn["clean"]["t"][1]-traces_nrn["clean"]["t"][1][0],traces_nrn["clean"]["V"][1],color=bcolor2)
+    ax4[1].plot(traces_nrn["noisy"]["t"][0]-traces_nrn["noisy"]["t"][0][0],traces_nrn["noisy"]["V"][0],color=bcolor1)
+    ax4[1].plot(traces_nrn["noisy"]["t"][1]-traces_nrn["noisy"]["t"][1][0],traces_nrn["noisy"]["V"][1],color=bcolor2)
+
+    for ax in ax4.flatten():
+        ax.set_ylim(ax3[1].get_ylim())
+    remove_axes(ax3[0])
+    remove_axes(ax4[0])
     
-    plt.show() 
-    fig.savefig(os.path.join(figpath,f"{fig_prefix}_full_network2.jpg"), bbox_inches='tight', dpi=300)
+    ax4[1].spines["top"].set_visible(False)
+    ax4[1].spines["right"].set_visible(False)
+    ax3[1].spines["top"].set_visible(False)
+    ax3[1].spines["right"].set_visible(False)
+    ax3[1].spines["bottom"].set_visible(False)
+    ax4[1].spines["bottom"].set_visible(False)
+    ax3[1].set_yticks([-50,0])
+    ax3[1].set_xticks([])
+    ax4[1].set_xticks([])
+
+    # plt.show() 
+    fig.savefig(os.path.join(figpath,f"fig9.png"), bbox_inches='tight', dpi=300)

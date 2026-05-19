@@ -1,6 +1,3 @@
-Figures 10 and 11 aren't working yet.
-Has been made public for access to the reviewers.
-This will be fixed asap.
 
 # Figures from Dickman, U., et al. (2026)
 
